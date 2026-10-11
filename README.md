@@ -7,4 +7,4 @@
 
 <img src="./assets/universe.svg" alt="A universe written in mathematics" width="100%">
 
-<img src="./assets/eq2.svg" alt="Key equations: polar wave, ridge sum, Fourier trail, vector field" width="100%">
+<img src="./assets/eq2.svg" alt="Key equations from the banner: polar wave, ridge sum, Fourier trail, vector field" width="100%">
