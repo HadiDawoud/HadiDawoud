@@ -2,7 +2,8 @@
 // The SVG canvas is cropped to the content, so GitHub scales the row to the full README
 // column width (the biggest possible text for a single line).
 //   cd universe && npm i mathjax-full   (one-time)   then:   node equations.js ../assets/equations.svg
-//   add --compact to drop the field definition F=(...) for ~20% larger text
+//   Ship with --compact (drops F=(...)) so the four glyphs stay as large as possible:
+//   node equations.js ../assets/equations.svg --compact
 'use strict';
 const fs = require('fs'), path = require('path');
 const { mathjax } = require('mathjax-full/js/mathjax.js');
@@ -15,7 +16,8 @@ const { AllPackages } = require('mathjax-full/js/input/tex/AllPackages.js');
 const COMPACT = process.argv.includes('--compact');
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const out = args[0] || path.join(__dirname, '..', 'assets', 'equations.svg');
-const K = 10, GAP = 28, PAD_X = 14, PAD_Y = 12, INK = '#1f2328';   // K = px per ex; layout is scale-free
+// GAP/PAD shrink the canvas so GitHub's width=100% scale makes the glyphs larger
+const K = 10, GAP = 8, PAD_X = 4, PAD_Y = 4, INK = '#1f2328';   // K = px per ex; layout is scale-free
 
 const EQS = [
   String.raw`r(\theta)=r_0+a\sin(n\theta+\phi)`,
