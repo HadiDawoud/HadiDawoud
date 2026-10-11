@@ -21,8 +21,9 @@ const K = 10, GAP = 8, PAD_X = 4, PAD_Y = 4, INK = '#1f2328';   // K = px per ex
 
 const EQS = [
   String.raw`r(\theta)=r_0+a\sin(n\theta+\phi)`,
-  String.raw`y(x)=c+\boldsymbol{\sum}_{k}a_k\sin(\omega_kx+\phi_k)`,
-  String.raw`x(t)=a_0+\boldsymbol{\sum}_{k}[a_k\cos kt+b_k\sin kt]`,
+  // \displaystyle makes Σ a bit larger than the surrounding inline math
+  String.raw`y(x)=c+\displaystyle\boldsymbol{\sum}_{k}a_k\sin(\omega_kx+\phi_k)`,
+  String.raw`x(t)=a_0+\displaystyle\boldsymbol{\sum}_{k}[a_k\cos kt+b_k\sin kt]`,
   COMPACT ? String.raw`\dot{p}=\hat{F}(p)`
           : String.raw`\dot{p}=\hat{F}(p),\ F=(-\sin\omega y,\sin\omega x)`,
 ];
