@@ -21,10 +21,10 @@ const K = 10, GAP = 8, PAD_X = 4, PAD_Y = 4, INK = '#1f2328';   // K = px per ex
 
 const EQS = [
   String.raw`r(\theta)=r_0+a\sin(n\theta+\phi)`,
-  // \Huge = clearly bigger Σ; stroke below = weight (MathJax has no bold ∑)
-  String.raw`y(x)=c+{\Huge\sum}_{k}a_k\sin(\omega_kx+\phi_k)`,
-  String.raw`x(t)=a_0+{\Huge\sum}_{k}[a_k\cos kt+b_k\sin kt]`,
-  // same italic math as the other equations (upright \mathrm looked heavier)
+  // modest size bump only — no stroke faux-bold (that looked way too heavy)
+  String.raw`y(x)=c+{\Large\sum}_{k}a_k\sin(\omega_kx+\phi_k)`,
+  String.raw`x(t)=a_0+{\Large\sum}_{k}[a_k\cos kt+b_k\sin kt]`,
+  // same italic math as the other equations
   COMPACT ? String.raw`\dot{p}=\hat{F}(p)`
           : String.raw`\dot{p}=\hat{F}(p),\ F=(-\sin\omega y,\sin\omega x)`,
 ];
@@ -33,12 +33,9 @@ const adaptor = liteAdaptor(); RegisterHTMLHandler(adaptor);
 const doc = mathjax.document('', { InputJax: new TeX({ packages: AllPackages }), OutputJax: new SVG({ fontCache: 'none' }) });
 const eq = EQS.map(tex => {
   let s = adaptor.innerHTML(doc.convert(tex, { display: false })).replace(/currentColor/g, INK);
-  // bump MathJax's size wrapper so Σ reads ~2× the body text in the README
+  // keep Σ a bit larger than body text; no extra stroke weight
   s = s.replace(/<g data-mml-node="mstyle" transform="scale\([^"]+\)">(\s*<g data-mml-node="mo">\s*<path data-c="2211")/g,
-    `<g data-mml-node="mstyle" transform="scale(2.2)">$1`);
-  // light stroke = mild faux-bold (~30% of prior) (presentation attr on the path beats parent stroke-width="0")
-  s = s.replace(/<path data-c="2211"/g,
-    `<path data-c="2211" stroke="${INK}" stroke-width="27" stroke-linejoin="round" paint-order="stroke fill"`);
+    `<g data-mml-node="mstyle" transform="scale(1.55)">$1`);
   return { s, w: parseFloat(/width="([\d.]+)ex"/.exec(s)[1]) * K, h: parseFloat(/height="([\d.]+)ex"/.exec(s)[1]) * K };
 });
 const W = Math.round(eq.reduce((t, e) => t + e.w, 0) + GAP * (eq.length - 1) + 2 * PAD_X);
