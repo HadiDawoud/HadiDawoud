@@ -1,1 +1,9 @@
-universe/node_modules/
+# Generators (local only - public repo shows rendered SVGs)
+universe/
+
+# Local drop-ins / previews (not part of the profile)
+equations.svg
+banner.svg
+config.js
+generate.js
+preview.png
