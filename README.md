@@ -6,3 +6,5 @@
 </a>
 
 <img src="./assets/universe.svg" alt="A universe written in mathematics" width="100%">
+
+<img src="./assets/equations.svg" alt="Key equations: polar wave, ridge sum, Fourier trail, vector field" width="100%">
