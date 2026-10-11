@@ -21,17 +21,21 @@ const K = 10, GAP = 8, PAD_X = 4, PAD_Y = 4, INK = '#1f2328';   // K = px per ex
 
 const EQS = [
   String.raw`r(\theta)=r_0+a\sin(n\theta+\phi)`,
-  // \displaystyle makes Σ a bit larger than the surrounding inline math
-  String.raw`y(x)=c+\displaystyle\boldsymbol{\sum}_{k}a_k\sin(\omega_kx+\phi_k)`,
-  String.raw`x(t)=a_0+\displaystyle\boldsymbol{\sum}_{k}[a_k\cos kt+b_k\sin kt]`,
-  COMPACT ? String.raw`\dot{p}=\hat{F}(p)`
-          : String.raw`\dot{p}=\hat{F}(p),\ F=(-\sin\omega y,\sin\omega x)`,
+  // \Large scales Σ up; MathJax has no bold ∑ glyph, so we stroke that path below
+  String.raw`y(x)=c+{\Large\sum}_{k}a_k\sin(\omega_kx+\phi_k)`,
+  String.raw`x(t)=a_0+{\Large\sum}_{k}[a_k\cos kt+b_k\sin kt]`,
+  // upright letters so ṗ=F̂(p) doesn't look heavier than the others
+  COMPACT ? String.raw`\dot{\mathrm{p}}=\hat{\mathrm{F}}(\mathrm{p})`
+          : String.raw`\dot{\mathrm{p}}=\hat{\mathrm{F}}(\mathrm{p}),\ \mathrm{F}=(-\sin\omega y,\sin\omega x)`,
 ];
 
 const adaptor = liteAdaptor(); RegisterHTMLHandler(adaptor);
 const doc = mathjax.document('', { InputJax: new TeX({ packages: AllPackages }), OutputJax: new SVG({ fontCache: 'none' }) });
 const eq = EQS.map(tex => {
-  const s = adaptor.innerHTML(doc.convert(tex, { display: false })).replace(/currentColor/g, INK);
+  let s = adaptor.innerHTML(doc.convert(tex, { display: false })).replace(/currentColor/g, INK);
+  // faux-bold the ∑ path (U+2211) — \boldsymbol does nothing for this glyph in MathJax SVG
+  s = s.replace(/<path data-c="2211"/g,
+    `<path data-c="2211" stroke="${INK}" stroke-width="35" stroke-linejoin="round" paint-order="stroke fill"`);
   return { s, w: parseFloat(/width="([\d.]+)ex"/.exec(s)[1]) * K, h: parseFloat(/height="([\d.]+)ex"/.exec(s)[1]) * K };
 });
 const W = Math.round(eq.reduce((t, e) => t + e.w, 0) + GAP * (eq.length - 1) + 2 * PAD_X);
