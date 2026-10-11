@@ -21,10 +21,10 @@ const K = 10, GAP = 8, PAD_X = 4, PAD_Y = 4, INK = '#1f2328';   // K = px per ex
 
 const EQS = [
   String.raw`r(\theta)=r_0+a\sin(n\theta+\phi)`,
-  String.raw`y(x)=c+\sum_{k}a_k\sin(\omega_kx+\phi_k)`,
-  String.raw`x(t)=a_0+\sum_{k}[a_k\cos kt+b_k\sin kt]`,
-  COMPACT ? String.raw`\dot{\mathbf p}=\hat{\mathbf F}(\mathbf p)`
-          : String.raw`\dot{\mathbf p}=\hat{\mathbf F}(\mathbf p),\ \mathbf F=(-\sin\omega y,\sin\omega x)`,
+  String.raw`y(x)=c+\boldsymbol{\sum}_{k}a_k\sin(\omega_kx+\phi_k)`,
+  String.raw`x(t)=a_0+\boldsymbol{\sum}_{k}[a_k\cos kt+b_k\sin kt]`,
+  COMPACT ? String.raw`\dot{p}=\hat{F}(p)`
+          : String.raw`\dot{p}=\hat{F}(p),\ F=(-\sin\omega y,\sin\omega x)`,
 ];
 
 const adaptor = liteAdaptor(); RegisterHTMLHandler(adaptor);
