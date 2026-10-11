@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-// =============================================================================
-// generate.js — standalone, dependency-free SVG generator.
+// Generates the banner SVG. No deps.
 //   node generate.js [seed] [outfile]
-// All geometry is computed from the equations below + parameters in config.js.
-// =============================================================================
+// Numbers live in config.js; the math is here.
 'use strict';
 const fs = require('fs'), path = require('path');
 const C = require('./config');
@@ -14,24 +12,24 @@ const { width: W, height: H, palette: P } = C;
 const TAU = Math.PI * 2;
 const { x: CX, y: CY } = C.center;
 
-// ---------- utilities --------------------------------------------------------
-function mulberry32(a) {                      // seeded PRNG -> reproducible output
+// --- helpers ---
+function mulberry32(a) {                      // same seed => same picture
   return () => { a |= 0; a = (a + 0x6D2B79F5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 const hashStr = s => { let h = 2166136261; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
-const stream = name => mulberry32((seed ^ hashStr(name)) >>> 0);   // independent stream per element
+const stream = name => mulberry32((seed ^ hashStr(name)) >>> 0);   // one rng per feature so they don't stomp each other
 const f = n => { const s = n.toFixed(1); return s.endsWith('.0') ? s.slice(0, -2) : s; };
 const col = k => P[k] || k;
 const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const rgb2hex = v => '#' + v.map(c => Math.round(c).toString(16).padStart(2, '0')).join('');
-// G. depth interpolation  p(z) = (1-z) p_near + z p_far
+// blend near->far by depth z
 const lerp = (near, far, z) => (1 - z) * near + z * far;
 const mixHex = (near, far, z) => { const a = hex2rgb(near), b = hex2rgb(far); return rgb2hex(a.map((c, i) => lerp(c, b[i], z))); };
 
-// Catmull-Rom spline -> cubic Béziers (smooth curves from few samples)
+// turn a few points into a smooth path (Catmull-Rom -> cubic beziers)
 function smooth(Pt, closed = false) {
   const n = Pt.length, at = i => closed ? Pt[(i + n) % n] : Pt[Math.max(0, Math.min(n - 1, i))];
   let d = `M${f(Pt[0][0])} ${f(Pt[0][1])}`;
@@ -46,7 +44,7 @@ const poly = Pt => 'M' + Pt.map(p => `${f(p[0])} ${f(p[1])}`).join('L');
 const defs = [], layers = [];
 const add = s => layers.push(s);
 
-// ---------- sky ---------------------------------------------------------------
+// sky + glow defs
 defs.push(`<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.skyTop}"/><stop offset=".6" stop-color="${P.skyMid}"/><stop offset="1" stop-color="${P.skyLow}"/></linearGradient>`);
 defs.push(`<radialGradient id="halo"><stop offset="0" stop-color="#fff4d8" stop-opacity=".9"/><stop offset=".07" stop-color="${P.ivory}" stop-opacity=".5"/><stop offset=".22" stop-color="${P.gold}" stop-opacity=".15"/><stop offset=".55" stop-color="#3b6f8f" stop-opacity=".06"/><stop offset="1" stop-color="#3b6f8f" stop-opacity="0"/></radialGradient>`);
 defs.push(`<radialGradient id="starHalo"><stop offset="0" stop-color="${P.ivory}" stop-opacity=".35"/><stop offset="1" stop-color="${P.ivory}" stop-opacity="0"/></radialGradient>`);
@@ -54,7 +52,7 @@ defs.push(`<radialGradient id="vig" cx=".5" cy=".5" r=".75"><stop offset=".55" s
 defs.push(`<filter id="blur" x="-10%" y="-50%" width="120%" height="200%"><feGaussianBlur stdDeviation="3.2"/></filter>`);
 add(`<rect width="${W}" height="${H}" fill="url(#sky)"/>`);
 
-// ---------- F. stars: seeded scatter + selected m-pointed stars ----------------------
+// stars + a couple of constellations
 const S = C.stars, pl = C.planet, sr = stream('stars');
 let stars = [];
 for (let i = 0; i < S.count; i++) {
@@ -68,13 +66,13 @@ const lines = [];
 const R4 = stream('starshape');
 C.constellations.forEach(con => {
   const picked = [];
-  con.anchors.forEach(([ax, ay]) => {                         // nearest unused seeded star to each anchor
+  con.anchors.forEach(([ax, ay]) => {                         // grab the closest unused star to each anchor
     let best = null, bd = 1e9;
     stars.forEach(s => { if (s.sel) return; const d = Math.hypot(s.x - ax, s.y - ay); if (d < bd) { bd = d; best = s; } });
     best.sel = { m: con.m, q: con.q, R: 4.5 + 4 * R4(), phi: -Math.PI / 2 + 0.2 * (R4() - .5) };
     picked.push(best);
   });
-  for (let i = 0; i < picked.length - 1; i++) {                // fine vector lines, trimmed at both ends
+  for (let i = 0; i < picked.length - 1; i++) {                // connect them, stop short of the tips
     const A = picked[i], B = picked[i + 1], d = Math.hypot(B.x - A.x, B.y - A.y), ux = (B.x - A.x) / d, uy = (B.y - A.y) / d;
     const a = A.sel.R + 3, b = B.sel.R + 3;
     lines.push(`M${f(A.x + ux * a)} ${f(A.y + uy * a)}L${f(B.x - ux * b)} ${f(B.y - uy * b)}`);
@@ -84,13 +82,13 @@ C.constellations.forEach(con => {
   const grp = stars.filter(s => !s.sel && s.o >= lo - 0.05 && s.o < lo + 0.15 + (bi === 3 ? 1 : 0));
   add(`<g fill="${P.ivory}" fill-opacity="${op}">${grp.map(s => `<circle cx="${f(s.x)}" cy="${f(s.y)}" r="${f(s.r)}"/>`).join('')}</g>`);
 });
-// star polygon: r_i = R (i even), qR (i odd);  (x_i,y_i) = c + r_i (cos, sin)(2πi/2m + φ)
+// pointed star: alternate outer/inner radius, then walk around the circle
 const starPoly = (cx, cy, R, q, m, phi) => Array.from({ length: 2 * m }, (_, i) => {
   const r = i % 2 === 0 ? R : q * R, a = TAU * i / (2 * m) + phi; return `${f(cx + r * Math.cos(a))},${f(cy + r * Math.sin(a))}`; }).join(' ');
 add(`<path d="${lines.join('')}" fill="none" stroke="${P.silver}" stroke-opacity=".38" stroke-width=".6"/>`);
 add(stars.filter(s => s.sel).map(s => `<circle cx="${f(s.x)}" cy="${f(s.y)}" r="${f(s.sel.R * 2.6)}" fill="url(#starHalo)"/><polygon points="${starPoly(s.x, s.y, s.sel.R, s.sel.q, s.sel.m, s.sel.phi)}" fill="${P.ivory}" fill-opacity=".92"/>`).join(''));
 
-// ---------- E. vector field particles: dp/dt = F̂(p), classical RK4 ------------------
+// little drift streaks (follow a vector field with RK4)
 const FD = C.field, fr = stream('field');
 const Fhat = (x, y) => { const u = -Math.sin(FD.omega * y), v = Math.sin(FD.omega * x), n = Math.hypot(u, v) + 1e-9; return [u / n, v / n]; };
 function rk4(p, h) {
@@ -106,14 +104,14 @@ for (let i = 0; i < FD.particles; i++) {
   let p = s; const tr = [p];
   for (let k = 0; k < FD.steps; k++) { p = rk4(p, FD.h); if (k % 4 === 3) tr.push(p); }
   const n = tr.length, cuts = [0, Math.floor(n / 3), Math.floor(2 * n / 3), n - 1];
-  [0.35, 0.7, 1].forEach((m, j) => {                       // tail -> head fades in
+  [0.35, 0.7, 1].forEach((m, j) => {                       // fade the trail in toward the tip
     fieldSvg += `<path d="${smooth(tr.slice(cuts[j], cuts[j + 1] + 1))}" stroke-opacity="${f(FD.op * m)}"/>`; });
 }
 add(`<g fill="none" stroke="${P.teal}" stroke-width=".7" stroke-linecap="round">${fieldSvg}</g>`);
 
-// ---------- D. Fourier trails ------------------------------------------------------
+// light trails (short Fourier series)
 const TR = C.trails;
-const fourier = (c, t, scale = 1) => {                      // x(t), y(t) truncated Fourier series
+const fourier = (c, t, scale = 1) => {
   let x = c.a0, y = 0;
   c.ax.forEach((a, k) => x += a * Math.cos((k + 1) * t)); c.bx.forEach((b, k) => x += b * Math.sin((k + 1) * t));
   c.cy.forEach((a, k) => y += a * Math.cos((k + 1) * t)); c.dy.forEach((b, k) => y += b * Math.sin((k + 1) * t));
@@ -135,15 +133,13 @@ add(`<g fill="none" filter="url(#blur)">${glowSvg}</g><g fill="none" stroke-line
 { const L = TR.loop, pts = []; for (let i = 0; i < L.samples; i++) pts.push(fourier(L, TAU * i / L.samples));
   add(`<path d="${smooth(pts, true)}" fill="none" stroke="${P.gold}" stroke-opacity="${L.op}" stroke-width=".6"/>`); }
 
-// ---------- B. orbits: Kepler ellipse in its own plane -> tilt -> rotate -> project -------------
-//   X = a cos t - a e ,  Y = b sin t (b = a√(1-e²));  (x,y,z) = (X, Y cosτ, Y sinτ);  rotate by α in screen plane
+// orbits around the pearl (kepler ellipse, tilted, then flattened to 2d)
 function orbitPt(cx, cy, a, e, tilt, alpha, t) {
   const b = a * Math.sqrt(1 - e * e), X = a * Math.cos(t) - a * e, Y = b * Math.sin(t);
   const x = X, y = Y * Math.cos(tilt), z = Y * Math.sin(tilt), ca = Math.cos(alpha), sa = Math.sin(alpha);
   return [cx + x * ca - y * sa, cy + x * sa + y * ca, z];
 }
-// An orbit is exactly an ellipse (rx = a, ry = b cosτ, centre shifted by -a e along the major axis, rotated by α);
-// the half with z>0 (Y>0) is the near side, selected with a half-plane clip through the focus.
+// draw as a plain ellipse; clip so the far half sits behind the pearl
 const deg = r => f(r * 180 / Math.PI);
 const clipHalf = (id, cx, cy, alpha, front) => defs.push(`<clipPath id="${id}"><rect x="-3000" y="${front ? 0 : -3000}" width="6000" height="3000" transform="translate(${f(cx)} ${f(cy)}) rotate(${deg(alpha)})"/></clipPath>`);
 const ellipseEl = (cx, cy, a, e, tilt, alpha) => {
@@ -158,20 +154,20 @@ C.orbits.forEach((o, i) => {
   o.dots.forEach(t => { const p = orbitPt(CX, CY, o.a, o.e, o.tilt, o.alpha, t), front = Math.sin(t) > 0;
     (front ? (s => oFront += s) : (s => oBack += s))(`<circle cx="${f(p[0])}" cy="${f(p[1])}" r="2.2" fill="${col(o.c)}" stroke="none" fill-opacity="${front ? 1 : .55}"/><circle cx="${f(p[0])}" cy="${f(p[1])}" r="6" fill="${col(o.c)}" stroke="none" fill-opacity="${front ? .14 : .06}"/>`); });
 });
-add(`<g fill="none" stroke-linecap="round">${oBack}</g>`);                    // behind the pearl
+add(`<g fill="none" stroke-linecap="round">${oBack}</g>`);                    // orbits behind the pearl
 
-// ---------- A. pearl: halo, concentric circles, polar waves, flares ---------------------
+// the pearl - glow, rings, wavy shells, flares
 const PE = C.pearl, CI = PE.circles;
 add(`<circle cx="${CX}" cy="${CY}" r="${PE.haloR}" fill="url(#halo)"/>`);
 let circ = '';
-for (let j = 0; j <= CI.count; j++) {                       // x = xc + R cosθ, y = yc + R sinθ
+for (let j = 0; j <= CI.count; j++) {
   const R = CI.R0 + (CI.Rmax - CI.R0) * Math.pow(j / CI.count, CI.p);
   const op = CI.op0 * Math.exp(-(R - CI.R0) / CI.lambda) * (0.6 + 0.4 * Math.cos(TAU * j / CI.period));
   circ += `<circle r="${f(R)}" stroke-opacity="${f(op * 100) / 100}"/>`;
 }
 add(`<g transform="translate(${CX} ${CY})" fill="none" stroke="${P.ivory}" stroke-width="${CI.width}">${circ}</g>`);
 let waves = '';
-PE.waves.forEach(w => {                                      // r(θ)=r0+a sin(nθ+φ) ; x=xc+r cosθ ; y=yc+r sinθ
+PE.waves.forEach(w => {                                      // squiggly closed curves around the center
   const N = Math.max(72, 12 * w.n), pts = [];
   for (let i = 0; i < N; i++) { const th = TAU * i / N, r = w.r0 + w.a * Math.sin(w.n * th + w.phi);
     pts.push([CX + r * Math.cos(th), CY + r * Math.sin(th)]); }
@@ -180,9 +176,9 @@ PE.waves.forEach(w => {                                      // r(θ)=r0+a sin(n
 add(`<g fill="none" stroke-width=".7">${waves}</g>`);
 PE.flares.forEach(fl => add(`<polygon points="${starPoly(CX, CY, fl.R, fl.q, fl.m, fl.phi)}" fill="${P.ivory}" fill-opacity=".55"/>`));
 add(`<circle cx="${CX}" cy="${CY}" r="${PE.ringR}" fill="none" stroke="${P.ivory}" stroke-opacity=".6" stroke-width=".8"/><circle cx="${CX}" cy="${CY}" r="${PE.coreR}" fill="#fff6dc"/>`);
-add(`<g fill="none" stroke-linecap="round">${oFront}</g>`);                  // in front of the pearl
+add(`<g fill="none" stroke-linecap="round">${oFront}</g>`);                  // orbits in front
 
-// ---------- planet: shaded disc, latitude arcs, rings split into back / front halves ------------
+// planet + rings (back half, body, front half)
 const RG = pl.rings, ca = Math.cos(pl.ringAlpha), sa = Math.sin(pl.ringAlpha);
 const ringOp = u => (0.12 + 0.5 * Math.pow(0.5 + 0.5 * Math.sin(TAU * RG.freq * u + RG.phase), 2)) * (1 - Math.exp(-Math.pow((u - RG.gapAt) / RG.gapW, 2)));
 let rBack = '', rFront = '';
@@ -197,7 +193,7 @@ for (let i = 0; i < RG.count; i++) {
 add(`<g clip-path="url(#rb)" stroke="${P.ivory}" stroke-width=".7">${rBack}</g>`);
 defs.push(`<radialGradient id="planet" cx=".3" cy=".42" r=".85" fx=".2" fy=".4"><stop offset="0" stop-color="#cfc9b6"/><stop offset=".35" stop-color="#6d7488"/><stop offset=".7" stop-color="#1a2238"/><stop offset="1" stop-color="#05080f"/></radialGradient>`);
 add(`<circle cx="${pl.x}" cy="${pl.y}" r="${pl.R}" fill="url(#planet)"/>`);
-{ const elev = Math.asin(Math.cos(pl.ringTilt)); let lat = '';        // latitude circles seen at elevation `elev`
+{ const elev = Math.asin(Math.cos(pl.ringTilt)); let lat = '';        // faint latitude lines on the disc
   pl.latitudes.forEach(phiDeg => { const ph = phiDeg * Math.PI / 180, rx = pl.R * Math.cos(ph), yc = -pl.R * Math.sin(ph) * Math.cos(elev), pts = [];
     for (let k = 0; k <= 20; k++) { const t = Math.PI * k / 20, x = rx * Math.cos(t), y = yc + rx * Math.sin(elev) * Math.sin(t);
       pts.push([pl.x + x * ca - y * sa, pl.y + x * sa + y * ca]); }
@@ -205,7 +201,7 @@ add(`<circle cx="${pl.x}" cy="${pl.y}" r="${pl.R}" fill="url(#planet)"/>`);
   add(`<g fill="none" stroke="#dfe5f2" stroke-opacity=".2" stroke-width=".5">${lat}</g>`); }
 add(`<g clip-path="url(#rf)" stroke="${P.ivory}" stroke-width=".7">${rFront}</g>`);
 
-// ---------- C. mountains ---------------------------------------------------------------------
+// mountain ridges (stacked, far -> near)
 const MT = C.mountains, mr = stream('mountains');
 function makeRidge(L) {
   const T = [];
@@ -226,7 +222,7 @@ MT.layers.forEach((L, i) => {
   defs.push(`<linearGradient id="mf${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${ft}"/><stop offset="1" stop-color="${fb}"/></linearGradient>` +
             `<linearGradient id="mr${i}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${W}" y2="0"><stop offset="0" stop-color="${rc}" stop-opacity="${f(ro * .45 * 100) / 100}"/><stop offset=".5" stop-color="${i < 3 ? P.gold : rc}" stop-opacity="${Math.min(1, ro * 1.6)}"/><stop offset="1" stop-color="${rc}" stop-opacity="${f(ro * .45 * 100) / 100}"/></linearGradient>`);
   add(`<path d="M${top}L${W + 6} ${H + 10}L-6 ${H + 10}Z" fill="url(#mf${i})" stroke="url(#mr${i})" stroke-width="${sw}"/>`);
-  let cont = '';                                             // contour lines: y(x - jδ) + j·cstep, fading with j
+  let cont = '';                                             // contour hatching under the ridge
   for (let j = 1; j <= L.contours; j++) { const q = [];
     for (let x = -6; x <= W + 6; x += MT.step) q.push(`${f(x)} ${f(y(x - j * 9) + j * L.cstep)}`);
     cont += `<path d="M${q.join('L')}" stroke-opacity="${f(0.34 * (1 - j / (L.contours + 1)) * (1 - 0.5 * z) * 100) / 100}"/>`; }
@@ -234,12 +230,12 @@ MT.layers.forEach((L, i) => {
 });
 const ground = ridges[ridges.length - 1];
 
-// ---------- foreground: recursive trees (L-system style) + stacked-triangle conifers ----------------
+// trees up front (branchy recursive ones + simple pine silhouettes)
 const T = C.trees, tr2 = stream('trees');
 let treeSvg = '';
 T.list.forEach(t => {
   const seg = {};
-  (function rec(x, y, ang, l, d) {                          // child = parent + ℓρ(cos θ, sin θ), θ' = θ ± δ(1+ε)
+  (function rec(x, y, ang, l, d) {                          // recurse: step forward, then branch left/right
     if (d === 0) return;
     const x2 = x + l * Math.cos(ang), y2 = y + l * Math.sin(ang);
     (seg[d] = seg[d] || []).push(`M${f(x)} ${f(y)}L${f(x2)} ${f(y2)}`);
@@ -260,7 +256,7 @@ CF.xs.forEach(x => {
 add(`<g fill="${P.foreground}">${conif}</g>`);
 add(`<rect width="${W}" height="${H}" fill="url(#vig)"/>`);
 
-// ---------- assemble -----------------------------------------------------------------------
+// stitch it together and write out
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="A universe written in mathematics: a luminous pearl, ringed planet, layered ridges and constellations, all generated from equations">
 <title>A Universe Written in Mathematics</title>
 <defs>${defs.join('')}</defs>
